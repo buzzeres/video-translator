@@ -3,478 +3,995 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Translator</title>
+  <title>LinguaSync — AI Video Translator</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0d0d1a;
-      --surface: #161628;
-      --surface2: #1e1e35;
-      --border: #2a2a4a;
-      --accent: #6c63ff;
-      --accent2: #4ecca3;
-      --text: #e2e2f0;
-      --muted: #7070a0;
-      --error: #ff6b6b;
-      --success: #4ecca3;
+      --bg: #080812;
+      --surface: #10101e;
+      --surface2: #17172a;
+      --surface3: #1f1f38;
+      --border: #ffffff12;
+      --border-hover: #ffffff28;
+      --accent: #7c6ff7;
+      --accent-bright: #9d94ff;
+      --green: #34d399;
+      --red: #f87171;
+      --yellow: #fbbf24;
+      --text: #f0f0fa;
+      --text-2: #a0a0c0;
+      --text-3: #606080;
+      --radius: 14px;
+      --radius-sm: 8px;
     }
+
+    html { scroll-behavior: smooth; }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Glow blobs ── */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 { width: 600px; height: 600px; background: #7c6ff7; top: -200px; left: -200px; }
+    .blob-2 { width: 500px; height: 500px; background: #34d399; bottom: -150px; right: -150px; }
+
+    /* ── Layout ── */
+    .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+    /* ── Header ── */
+    nav {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      padding: 32px 16px 64px;
+      justify-content: space-between;
+      padding: 28px 0 0;
+      margin-bottom: 64px;
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-
-    header h1 {
-      font-size: 2.4rem;
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
       font-weight: 700;
-      letter-spacing: 2px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      color: var(--text-2);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(124, 111, 247, 0.12);
+      border: 1px solid rgba(124, 111, 247, 0.3);
+      border-radius: 99px;
+      padding: 5px 14px;
+      font-size: 0.8rem;
+      color: var(--accent-bright);
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 .grad {
+      background: linear-gradient(135deg, var(--accent-bright) 0%, var(--green) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
-    header p {
-      color: var(--muted);
-      margin-top: 8px;
-      font-size: 0.95rem;
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--text-2);
+      max-width: 520px;
+      margin: 0 auto;
     }
 
+    /* ── Main form grid ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 780px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 28px;
-      width: 100%;
-      max-width: 680px;
-      margin-bottom: 20px;
+      border-radius: var(--radius);
+      padding: 24px;
     }
 
-    .card h2 {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--muted);
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 18px;
+      letter-spacing: 1.2px;
+      color: var(--text-3);
+      margin-bottom: 16px;
     }
 
-    /* Tabs */
-    .tabs {
+    /* ── Source tabs ── */
+    .source-tabs {
       display: flex;
-      gap: 4px;
+      gap: 0;
       background: var(--surface2);
-      border-radius: 8px;
-      padding: 4px;
-      margin-bottom: 18px;
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      margin-bottom: 16px;
     }
 
-    .tab-btn {
+    .src-tab {
       flex: 1;
       background: none;
       border: none;
-      color: var(--muted);
-      padding: 8px;
+      color: var(--text-3);
+      padding: 8px 12px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       transition: all 0.15s;
     }
 
-    .tab-btn.active {
-      background: var(--accent);
-      color: #fff;
+    .src-tab.active {
+      background: var(--surface3);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* Inputs */
-    input[type=url], input[type=text], select {
+    /* ── URL input ── */
+    .url-wrap {
+      position: relative;
+    }
+
+    .url-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    input[type=url] {
       width: 100%;
       background: var(--surface2);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       color: var(--text);
-      padding: 12px 14px;
-      font-size: 0.95rem;
+      padding: 13px 14px 13px 40px;
+      font-size: 0.92rem;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
 
-    input[type=url]:focus, select:focus {
+    input[type=url]:focus {
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,111,247,0.12);
     }
 
-    /* Drop zone */
+    input[type=url]::placeholder { color: var(--text-3); }
+
+    /* ── Drop zone ── */
     .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 8px;
-      padding: 32px;
+      border: 1.5px dashed var(--border-hover);
+      border-radius: var(--radius-sm);
+      padding: 36px 20px;
       text-align: center;
       cursor: pointer;
-      transition: all 0.15s;
-      color: var(--muted);
+      transition: all 0.2s;
+      background: var(--surface2);
     }
 
     .drop-zone:hover, .drop-zone.drag-over {
       border-color: var(--accent);
-      background: rgba(108, 99, 255, 0.06);
-      color: var(--text);
+      background: rgba(124,111,247,0.06);
     }
 
     .drop-zone input { display: none; }
-    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
-    .drop-zone .hint { font-size: 0.82rem; margin-top: 8px; color: var(--muted); }
-    .drop-zone .selected-file { color: var(--accent2); font-weight: 500; margin-top: 8px; }
 
-    /* Settings grid */
-    .settings-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
+    .dz-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--surface3);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin: 0 auto 12px;
     }
 
-    .field label {
-      display: block;
-      font-size: 0.82rem;
-      color: var(--muted);
+    .dz-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 4px; }
+    .dz-hint { font-size: 0.78rem; color: var(--text-3); }
+    .dz-file { font-size: 0.82rem; color: var(--green); font-weight: 500; margin-top: 8px; }
+
+    /* ── Language selector ── */
+    .lang-wrap {
+      position: relative;
+      margin-top: 16px;
+    }
+
+    .lang-label {
+      font-size: 0.78rem;
+      color: var(--text-2);
       margin-bottom: 6px;
       font-weight: 500;
     }
 
-    /* Toggles */
-    .toggles {
+    select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 12px 36px 12px 14px;
+      font-size: 0.92rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      transition: border-color 0.15s;
+    }
+
+    select:focus { border-color: var(--accent); }
+
+    .select-arrow {
+      position: absolute;
+      right: 12px;
+      bottom: 13px;
+      pointer-events: none;
+      opacity: 0.4;
+      font-size: 0.7rem;
+    }
+
+    /* ── Feature toggles ── */
+    .features-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-3);
+      margin: 20px 0 12px;
+    }
+
+    .feature-grid {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
 
-    .toggle-row {
+    .feature-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
+      gap: 12px;
+      padding: 12px 14px;
       background: var(--surface2);
-      border-radius: 8px;
-    }
-
-    .toggle-row .toggle-info { flex: 1; }
-    .toggle-row .toggle-label { font-size: 0.92rem; font-weight: 500; }
-    .toggle-row .toggle-desc { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-
-    .switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      flex-shrink: 0;
-      margin-left: 12px;
-    }
-
-    .switch input { opacity: 0; width: 0; height: 0; }
-
-    .slider {
-      position: absolute;
-      inset: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 24px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
     }
 
-    .slider::before {
-      content: "";
+    .feature-row:hover { border-color: var(--border-hover); }
+    .feature-row.active-feature { border-color: rgba(124,111,247,0.3); background: rgba(124,111,247,0.06); }
+    .feature-row.disabled-feature { opacity: 0.38; pointer-events: none; }
+
+    .feat-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .feat-icon.purple { background: rgba(124,111,247,0.18); }
+    .feat-icon.green  { background: rgba(52,211,153,0.18); }
+    .feat-icon.yellow { background: rgba(251,191,36,0.18); }
+    .feat-icon.blue   { background: rgba(96,165,250,0.18); }
+    .feat-icon.pink   { background: rgba(244,114,182,0.18); }
+
+    .feat-text { flex: 1; min-width: 0; }
+    .feat-name { font-size: 0.88rem; font-weight: 600; }
+    .feat-desc { font-size: 0.75rem; color: var(--text-3); margin-top: 1px; }
+
+    /* Custom toggle */
+    .tog {
+      width: 38px;
+      height: 22px;
+      background: var(--surface3);
+      border-radius: 99px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      border: 1px solid var(--border);
+    }
+
+    .tog::after {
+      content: '';
       position: absolute;
-      width: 16px;
-      height: 16px;
-      left: 4px;
-      top: 3px;
-      background: var(--muted);
+      width: 14px;
+      height: 14px;
+      background: var(--text-3);
       border-radius: 50%;
+      top: 3px;
+      left: 3px;
       transition: transform 0.2s, background 0.2s;
     }
 
-    .switch input:checked + .slider { background: var(--accent); border-color: var(--accent); }
-    .switch input:checked + .slider::before { transform: translateX(20px); background: #fff; }
+    .tog.on { background: var(--accent); border-color: var(--accent); }
+    .tog.on::after { transform: translateX(16px); background: #fff; }
 
-    /* Translate button */
+    /* ── Translate button ── */
     #translate-btn {
       width: 100%;
-      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      margin-top: 20px;
+      background: linear-gradient(135deg, var(--accent) 0%, #5b52cc 100%);
       color: #fff;
       border: none;
-      border-radius: 8px;
-      padding: 14px;
-      font-size: 1rem;
-      font-weight: 600;
+      border-radius: var(--radius-sm);
+      padding: 15px;
+      font-size: 0.98rem;
+      font-weight: 700;
       cursor: pointer;
-      letter-spacing: 0.5px;
-      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 24px rgba(124,111,247,0.3);
     }
 
-    #translate-btn:hover { opacity: 0.9; }
-    #translate-btn:active { transform: scale(0.99); }
-    #translate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #translate-btn:hover { opacity: 0.92; box-shadow: 0 6px 32px rgba(124,111,247,0.45); }
+    #translate-btn:active { transform: scale(0.985); }
+    #translate-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
-    /* Progress */
-    #progress-card { display: none; }
+    /* ── Right panel ── */
+    .right-panel { display: flex; flex-direction: column; gap: 16px; }
 
-    .progress-bar-wrap {
+    /* ── How it works ── */
+    .steps-list { display: flex; flex-direction: column; gap: 0; }
+
+    .step-item {
+      display: flex;
+      gap: 14px;
+      padding: 12px 0;
+      position: relative;
+    }
+
+    .step-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 40px;
+      bottom: 0;
+      width: 1px;
+      background: var(--border);
+    }
+
+    .step-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-3);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-num.done { background: rgba(52,211,153,0.15); border-color: rgba(52,211,153,0.4); color: var(--green); }
+    .step-num.active-step { background: rgba(124,111,247,0.15); border-color: rgba(124,111,247,0.4); color: var(--accent-bright); }
+
+    .step-body { padding-top: 4px; }
+    .step-title { font-size: 0.85rem; font-weight: 600; }
+    .step-sub { font-size: 0.75rem; color: var(--text-3); margin-top: 2px; }
+
+    /* ── Tips card ── */
+    .tip-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .tip-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .tip-icon { font-size: 0.9rem; margin-top: 1px; flex-shrink: 0; }
+    .tip-text { font-size: 0.8rem; color: var(--text-2); line-height: 1.4; }
+
+    /* ── Progress screen ── */
+    #progress-screen { display: none; }
+
+    .prog-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--surface3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .prog-title { font-size: 1.1rem; font-weight: 700; }
+    .prog-sub { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
+
+    .prog-bar-outer {
       background: var(--surface2);
       border-radius: 99px;
-      height: 8px;
+      height: 6px;
       overflow: hidden;
-      margin: 12px 0 8px;
+      margin-bottom: 8px;
     }
 
-    .progress-bar-fill {
+    .prog-bar-inner {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      background: linear-gradient(90deg, var(--accent), var(--green));
       border-radius: 99px;
-      transition: width 0.4s ease;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
       width: 0%;
     }
 
-    .progress-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.82rem;
-      color: var(--muted);
+    .prog-pct { font-size: 0.78rem; color: var(--text-3); margin-bottom: 28px; }
+
+    /* Pipeline steps */
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
     }
 
-    .step-label {
-      color: var(--text);
-      font-size: 0.92rem;
-      margin-top: 10px;
+    .pipe-step {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      transition: all 0.2s;
     }
+
+    .pipe-step.p-done {
+      border-color: rgba(52,211,153,0.3);
+      background: rgba(52,211,153,0.06);
+    }
+
+    .pipe-step.p-active {
+      border-color: rgba(124,111,247,0.5);
+      background: rgba(124,111,247,0.08);
+      box-shadow: 0 0 16px rgba(124,111,247,0.12);
+    }
+
+    .pipe-icon { font-size: 1.2rem; margin-bottom: 6px; }
+    .pipe-name { font-size: 0.75rem; font-weight: 600; color: var(--text-2); }
+    .pipe-status { font-size: 0.68rem; color: var(--text-3); margin-top: 2px; }
+    .pipe-step.p-done .pipe-status { color: var(--green); }
+    .pipe-step.p-active .pipe-status { color: var(--accent-bright); }
 
     #cancel-btn {
-      margin-top: 14px;
       background: none;
       border: 1px solid var(--border);
-      color: var(--muted);
-      padding: 8px 20px;
-      border-radius: 6px;
+      color: var(--text-3);
+      padding: 9px 22px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       transition: border-color 0.15s, color 0.15s;
     }
 
-    #cancel-btn:hover { border-color: var(--error); color: var(--error); }
+    #cancel-btn:hover { border-color: var(--red); color: var(--red); }
 
-    /* Error */
-    .error-box {
-      background: rgba(255, 107, 107, 0.1);
-      border: 1px solid rgba(255, 107, 107, 0.3);
-      border-radius: 8px;
-      padding: 14px;
-      color: var(--error);
-      font-size: 0.9rem;
-      margin-top: 12px;
+    /* ── Error ── */
+    .error-banner {
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.25);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      color: var(--red);
+      font-size: 0.86rem;
       display: none;
-    }
-
-    /* Results */
-    #results-card { display: none; }
-
-    video {
-      width: 100%;
-      border-radius: 8px;
-      background: #000;
       margin-bottom: 16px;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
     }
 
-    .download-grid {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+    .error-banner.visible { display: flex; }
+
+    /* ── Results screen ── */
+    #results-screen { display: none; }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      align-items: start;
     }
+
+    @media (max-width: 780px) {
+      .results-grid { grid-template-columns: 1fr; }
+    }
+
+    .video-wrap {
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    video { width: 100%; display: block; max-height: 480px; }
+
+    .dl-panel { display: flex; flex-direction: column; gap: 12px; }
+
+    .dl-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .dl-card h3 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-3); margin-bottom: 14px; }
 
     .dl-btn {
-      flex: 1;
-      min-width: 120px;
-      text-align: center;
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.86rem;
       font-weight: 600;
       text-decoration: none;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-bottom: 8px;
     }
 
+    .dl-btn:last-child { margin-bottom: 0; }
     .dl-btn:hover { opacity: 0.85; }
-    .dl-btn.primary { background: var(--accent2); color: #0d0d1a; }
-    .dl-btn.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .dl-btn:active { transform: scale(0.98); }
 
-    .job-info {
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 14px;
+    .dl-btn.dl-primary { background: var(--accent); color: #fff; }
+    .dl-btn.dl-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+
+    .dl-btn-icon { font-size: 1rem; }
+
+    .success-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(52,211,153,0.1);
+      border: 1px solid rgba(52,211,153,0.25);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: var(--green);
+      font-weight: 500;
+      margin-bottom: 14px;
     }
 
-    .translate-another {
-      display: block;
-      text-align: center;
-      margin-top: 14px;
-      color: var(--accent);
+    .new-video-btn {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 11px;
+      border-radius: var(--radius-sm);
+      font-size: 0.86rem;
+      font-weight: 600;
       cursor: pointer;
-      font-size: 0.9rem;
-      text-decoration: underline;
+      transition: border-color 0.15s, color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .new-video-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 32px 0 0;
+      font-size: 0.78rem;
+      color: var(--text-3);
+      border-top: 1px solid var(--border);
+      margin-top: 64px;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Video Translator</h1>
-    <p>AI-powered dubbing, subtitles, and lip-sync in any language</p>
-  </header>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
 
-  <!-- Input card -->
-  <div class="card" id="input-card">
-    <h2>Video Source</h2>
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="url">Paste URL</button>
-      <button class="tab-btn" data-tab="file">Upload File</button>
-    </div>
-
-    <div class="tab-panel active" id="tab-url">
-      <input type="url" id="video-url" placeholder="https://youtube.com/watch?v=...  or any direct video URL" />
-    </div>
-
-    <div class="tab-panel" id="tab-file">
-      <div class="drop-zone" id="drop-zone">
-        <input type="file" id="file-input" accept=".mp4,.mov,.mkv,.avi,.webm" />
-        <div class="icon">&#x1F4F9;</div>
-        <div>Click to choose a video or drag &amp; drop here</div>
-        <div class="hint">Supported: MP4, MOV, MKV, AVI, WEBM</div>
-        <div class="selected-file" id="file-label"></div>
+  <div class="page">
+    <nav>
+      <div class="logo">
+        <div class="logo-icon">&#x1F310;</div>
+        LinguaSync
       </div>
-    </div>
-  </div>
+      <div class="badge">AI-Powered Translation</div>
+    </nav>
 
-  <!-- Settings card -->
-  <div class="card">
-    <h2>Settings</h2>
-    <div class="settings-grid" style="margin-bottom:18px">
-      <div class="field">
-        <label>Target Language</label>
-        <select id="lang-select"><option>Loading...</option></select>
-      </div>
+    <!-- ── Hero ── -->
+    <div class="hero">
+      <div class="hero-eyebrow">&#x2728; Powered by Whisper + ElevenLabs</div>
+      <h1>Translate Any Video<br>Into <span class="grad">Any Language</span></h1>
+      <p>Paste a YouTube link or upload a file. Get back a fully dubbed, subtitled video in minutes.</p>
     </div>
 
-    <div class="toggles">
-      <div class="toggle-row">
-        <div class="toggle-info">
-          <div class="toggle-label">Generate Subtitles</div>
-          <div class="toggle-desc">Burn translated subtitles into the video</div>
+    <!-- ── Input screen ── -->
+    <div id="input-screen">
+      <div class="form-grid">
+
+        <!-- Left: Source + Language + Button -->
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Video Source</div>
+
+            <div class="source-tabs">
+              <button class="src-tab active" data-tab="url">&#x1F517; Paste a Link</button>
+              <button class="src-tab" data-tab="file">&#x1F4C1; Upload File</button>
+            </div>
+
+            <div class="tab-panel active" id="tab-url">
+              <div class="url-wrap">
+                <span class="url-icon">&#x1F50D;</span>
+                <input type="url" id="video-url" placeholder="https://youtube.com/watch?v=...  or any video URL" />
+              </div>
+            </div>
+
+            <div class="tab-panel" id="tab-file">
+              <div class="drop-zone" id="drop-zone">
+                <input type="file" id="file-input" accept=".mp4,.mov,.mkv,.avi,.webm" />
+                <div class="dz-icon">&#x1F4FC;</div>
+                <div class="dz-title">Drop your video here</div>
+                <div class="dz-hint">MP4, MOV, MKV, AVI, WEBM &mdash; up to 500 MB</div>
+                <div class="dz-file" id="file-label"></div>
+              </div>
+            </div>
+
+            <div class="lang-wrap">
+              <div class="lang-label">Translate into</div>
+              <select id="lang-select"><option>Loading languages...</option></select>
+              <span class="select-arrow">&#9660;</span>
+            </div>
+          </div>
+
+          <!-- Features -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Features</div>
+            <div class="feature-grid">
+
+              <div class="feature-row active-feature" id="row-subs" onclick="toggleFeat('subs')">
+                <div class="feat-icon purple">&#x1F4DD;</div>
+                <div class="feat-text">
+                  <div class="feat-name">Subtitles</div>
+                  <div class="feat-desc">Burn translated captions into video</div>
+                </div>
+                <div class="tog on" id="tog-subs"></div>
+                <input type="checkbox" id="cb-subs" checked hidden>
+              </div>
+
+              <div class="feature-row active-feature" id="row-dub" onclick="toggleFeat('dub')">
+                <div class="feat-icon green">&#x1F3A4;</div>
+                <div class="feat-text">
+                  <div class="feat-name">AI Dubbing</div>
+                  <div class="feat-desc">Replace audio with translated speech</div>
+                </div>
+                <div class="tog on" id="tog-dub"></div>
+                <input type="checkbox" id="cb-dub" checked hidden>
+              </div>
+
+              <div class="feature-row" id="row-voice" onclick="toggleFeat('voice')">
+                <div class="feat-icon yellow">&#x1F3AD;</div>
+                <div class="feat-text">
+                  <div class="feat-name">Voice Matching</div>
+                  <div class="feat-desc">Clone the original speaker's voice</div>
+                </div>
+                <div class="tog" id="tog-voice"></div>
+                <input type="checkbox" id="cb-voice" hidden>
+              </div>
+
+              <div class="feature-row" id="row-orig" onclick="toggleFeat('orig')">
+                <div class="feat-icon blue">&#x1F3B5;</div>
+                <div class="feat-text">
+                  <div class="feat-name">Keep Background Audio</div>
+                  <div class="feat-desc">Mix original audio quietly underneath</div>
+                </div>
+                <div class="tog" id="tog-orig"></div>
+                <input type="checkbox" id="cb-orig" hidden>
+              </div>
+
+              <div class="feature-row" id="row-lipsync" onclick="toggleFeat('lipsync')">
+                <div class="feat-icon pink">&#x1F444;</div>
+                <div class="feat-text">
+                  <div class="feat-name">Lip-Sync</div>
+                  <div class="feat-desc">Animate mouth to match dubbed audio</div>
+                </div>
+                <div class="tog" id="tog-lipsync"></div>
+                <input type="checkbox" id="cb-lipsync" hidden>
+              </div>
+
+            </div>
+          </div>
+
+          <button id="translate-btn">
+            <span>&#x25B6;</span> Translate Video
+          </button>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="tog-subs" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row">
-        <div class="toggle-info">
-          <div class="toggle-label">AI Dubbing</div>
-          <div class="toggle-desc">Synthesize translated speech audio</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="tog-dub" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row" id="row-voice">
-        <div class="toggle-info">
-          <div class="toggle-label">Voice Matching</div>
-          <div class="toggle-desc">Clone original speaker's voice (XTTS v2)</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="tog-voice">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row" id="row-lipsync">
-        <div class="toggle-info">
-          <div class="toggle-label">Lip-Sync</div>
-          <div class="toggle-desc">Animate mouth movements (requires Wav2Lip)</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="tog-lipsync">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="toggle-row" id="row-origaudio">
-        <div class="toggle-info">
-          <div class="toggle-label">Keep Original Audio</div>
-          <div class="toggle-desc">Mix original audio quietly under dubbed track</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="tog-orig">
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-  </div>
 
-  <div class="card" style="padding:0;border:none;background:none">
-    <button id="translate-btn">Translate Video</button>
-  </div>
+        <!-- Right: How it works + Tips -->
+        <div class="right-panel">
+          <div class="card">
+            <div class="card-title">How it works</div>
+            <div class="steps-list">
+              <div class="step-item">
+                <div class="step-num">1</div>
+                <div class="step-body">
+                  <div class="step-title">Download &amp; Extract</div>
+                  <div class="step-sub">Video is fetched and audio is separated</div>
+                </div>
+              </div>
+              <div class="step-item">
+                <div class="step-num">2</div>
+                <div class="step-body">
+                  <div class="step-title">Transcribe</div>
+                  <div class="step-sub">Whisper converts speech to timestamped text</div>
+                </div>
+              </div>
+              <div class="step-item">
+                <div class="step-num">3</div>
+                <div class="step-body">
+                  <div class="step-title">Translate</div>
+                  <div class="step-sub">Text is translated to your chosen language</div>
+                </div>
+              </div>
+              <div class="step-item">
+                <div class="step-num">4</div>
+                <div class="step-body">
+                  <div class="step-title">Dub with ElevenLabs</div>
+                  <div class="step-sub">AI voices speak the translated text</div>
+                </div>
+              </div>
+              <div class="step-item">
+                <div class="step-num">5</div>
+                <div class="step-body">
+                  <div class="step-title">Render</div>
+                  <div class="step-sub">Video, audio, and subtitles are combined</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-  <!-- Progress card -->
-  <div class="card" id="progress-card">
-    <h2>Processing</h2>
-    <div class="step-label" id="step-label">Starting...</div>
-    <div class="progress-bar-wrap">
-      <div class="progress-bar-fill" id="progress-fill"></div>
+          <div class="card">
+            <div class="card-title">Tips</div>
+            <div class="tip-item">
+              <span class="tip-icon">&#x26A1;</span>
+              <span class="tip-text">Short videos (under 5 min) process fastest on CPU</span>
+            </div>
+            <div class="tip-item">
+              <span class="tip-icon">&#x1F3A7;</span>
+              <span class="tip-text">Clear speech with minimal background noise gives best results</span>
+            </div>
+            <div class="tip-item">
+              <span class="tip-icon">&#x1F4FA;</span>
+              <span class="tip-text">YouTube, Vimeo, Twitter, and direct MP4 links all work</span>
+            </div>
+            <div class="tip-item">
+              <span class="tip-icon">&#x1F4BE;</span>
+              <span class="tip-text">Download the SRT file to use subtitles in any player</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="progress-meta">
-      <span id="progress-pct">0%</span>
-      <span id="job-id-label"></span>
-    </div>
-    <div class="error-box" id="error-box"></div>
-    <button id="cancel-btn">Cancel</button>
-  </div>
 
-  <!-- Results card -->
-  <div class="card" id="results-card">
-    <h2>Result</h2>
-    <video id="result-video" controls></video>
-    <div class="download-grid">
-      <a class="dl-btn primary" id="dl-video" href="#" download="translated.mp4">Download Video</a>
-      <a class="dl-btn secondary" id="dl-srt" href="#" download="subtitles.srt">Download SRT</a>
-      <a class="dl-btn secondary" id="dl-vtt" href="#" download="subtitles.vtt">Download VTT</a>
+    <!-- ── Progress screen ── -->
+    <div id="progress-screen">
+      <div class="card" style="max-width:740px; margin:0 auto">
+        <div class="prog-header">
+          <div class="spinner"></div>
+          <div>
+            <div class="prog-title" id="prog-title">Processing your video...</div>
+            <div class="prog-sub" id="prog-sub">Starting up</div>
+          </div>
+        </div>
+
+        <div class="prog-bar-outer">
+          <div class="prog-bar-inner" id="prog-bar"></div>
+        </div>
+        <div class="prog-pct" id="prog-pct">0% &nbsp;&middot;&nbsp; <span id="prog-job"></span></div>
+
+        <div class="pipeline" id="pipeline">
+          <div class="pipe-step" data-step="acquiring">
+            <div class="pipe-icon">&#x2B07;</div>
+            <div class="pipe-name">Download</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="preprocessing">
+            <div class="pipe-icon">&#x1F527;</div>
+            <div class="pipe-name">Extract Audio</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="transcribing">
+            <div class="pipe-icon">&#x1F4AC;</div>
+            <div class="pipe-name">Transcribe</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="diarizing">
+            <div class="pipe-icon">&#x1F465;</div>
+            <div class="pipe-name">Speakers</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="translating">
+            <div class="pipe-icon">&#x1F310;</div>
+            <div class="pipe-name">Translate</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="dubbing">
+            <div class="pipe-icon">&#x1F3A4;</div>
+            <div class="pipe-name">Dub</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="generating_subtitles">
+            <div class="pipe-icon">&#x1F4DD;</div>
+            <div class="pipe-name">Subtitles</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+          <div class="pipe-step" data-step="rendering">
+            <div class="pipe-icon">&#x1F3AC;</div>
+            <div class="pipe-name">Render</div>
+            <div class="pipe-status">Waiting</div>
+          </div>
+        </div>
+
+        <div class="error-banner" id="error-banner">
+          <span>&#x26A0;</span>
+          <span id="error-text"></span>
+        </div>
+
+        <button id="cancel-btn">&#x2715; Cancel</button>
+      </div>
     </div>
-    <div class="job-info" id="result-info"></div>
-    <span class="translate-another" id="translate-another">Translate another video</span>
+
+    <!-- ── Results screen ── -->
+    <div id="results-screen">
+      <div class="results-grid">
+        <div class="video-wrap">
+          <video id="result-video" controls></video>
+        </div>
+
+        <div class="dl-panel">
+          <div class="dl-card">
+            <div class="success-badge">&#x2713; Translation complete</div>
+            <h3>Downloads</h3>
+            <a class="dl-btn dl-primary" id="dl-video" href="#" download="translated.mp4">
+              <span class="dl-btn-icon">&#x1F4F9;</span> Download Video
+            </a>
+            <a class="dl-btn dl-secondary" id="dl-srt" href="#" download="subtitles.srt">
+              <span class="dl-btn-icon">&#x1F4C4;</span> Download SRT
+            </a>
+            <a class="dl-btn dl-secondary" id="dl-vtt" href="#" download="subtitles.vtt">
+              <span class="dl-btn-icon">&#x1F4C4;</span> Download VTT
+            </a>
+          </div>
+
+          <div class="dl-card">
+            <h3>How did it go?</h3>
+            <div style="font-size:0.82rem; color:var(--text-2); margin-bottom:14px; line-height:1.5">
+              Play the video to check the dubbing and subtitles. Download the SRT to use captions in VLC or any media player.
+            </div>
+            <button class="new-video-btn" id="new-video-btn">&#x2B06; Translate another video</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      LinguaSync &nbsp;&middot;&nbsp; Whisper &middot; ElevenLabs &middot; ffmpeg &middot; FastAPI
+    </footer>
   </div>
 
   <script>
     // ── Tab switching ──────────────────────────────────────────────────────────
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.src-tab').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.src-tab').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       });
     });
 
-    // ── Drop zone ──────────────────────────────────────────────────────────────
+    // ── File drop zone ────────────────────────────────────────────────────────
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const fileLabel = document.getElementById('file-label');
@@ -482,157 +999,138 @@
 
     dropZone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) {
-        selectedFile = fileInput.files[0];
-        fileLabel.textContent = selectedFile.name;
-      }
+      if (fileInput.files[0]) { selectedFile = fileInput.files[0]; fileLabel.textContent = '&#x2713; ' + selectedFile.name; }
     });
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file) { selectedFile = file; fileLabel.textContent = file.name; }
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (f) { selectedFile = f; fileLabel.textContent = '&#x2713; ' + f.name; }
     });
 
-    // ── Toggle dependencies ────────────────────────────────────────────────────
-    document.getElementById('tog-dub').addEventListener('change', e => {
-      const on = e.target.checked;
-      document.getElementById('row-voice').style.opacity = on ? '1' : '0.4';
-      document.getElementById('row-origaudio').style.opacity = on ? '1' : '0.4';
-      if (!on) {
-        document.getElementById('tog-voice').checked = false;
-        document.getElementById('tog-orig').checked = false;
-      }
-    });
+    // ── Feature toggles ───────────────────────────────────────────────────────
+    const featState = { subs: true, dub: true, voice: false, orig: false, lipsync: false };
 
-    // ── Load languages ─────────────────────────────────────────────────────────
+    function toggleFeat(key) {
+      featState[key] = !featState[key];
+      const tog = document.getElementById('tog-' + key);
+      const cb  = document.getElementById('cb-' + key);
+      const row = document.getElementById('row-' + key);
+      tog.classList.toggle('on', featState[key]);
+      cb.checked = featState[key];
+      row.classList.toggle('active-feature', featState[key]);
+
+      // Voice matching & keep original only relevant when dubbing is on
+      const dubOn = featState['dub'];
+      document.getElementById('row-voice').classList.toggle('disabled-feature', !dubOn);
+      document.getElementById('row-orig').classList.toggle('disabled-feature', !dubOn);
+      if (!dubOn) { featState.voice = false; featState.orig = false; document.getElementById('tog-voice').classList.remove('on'); document.getElementById('tog-orig').classList.remove('on'); }
+    }
+
+    // ── Load languages ────────────────────────────────────────────────────────
     async function loadLanguages() {
       try {
-        const res = await fetch('/languages');
-        const langs = await res.json();
+        const langs = await fetch('/languages').then(r => r.json());
         const sel = document.getElementById('lang-select');
-        sel.innerHTML = '';
-        langs.forEach(lang => {
-          const opt = document.createElement('option');
-          opt.value = lang;
-          opt.textContent = lang;
-          if (lang === 'Spanish') opt.selected = true;
-          sel.appendChild(opt);
-        });
-      } catch (e) {
-        console.error('Failed to load languages', e);
-      }
+        sel.innerHTML = langs.map(l => `<option${l==='Spanish'?' selected':''}>${l}</option>`).join('');
+      } catch(e) { console.error(e); }
     }
     loadLanguages();
 
-    // ── State ──────────────────────────────────────────────────────────────────
-    let currentJobId = null;
-    let pollInterval = null;
-    const isUrlTab = () => document.querySelector('.tab-btn.active').dataset.tab === 'url';
+    // ── State ─────────────────────────────────────────────────────────────────
+    let currentJobId = null, pollInterval = null;
+    const isUrlTab = () => document.querySelector('.src-tab.active').dataset.tab === 'url';
 
-    // ── Translate ──────────────────────────────────────────────────────────────
+    // ── Translate ─────────────────────────────────────────────────────────────
     document.getElementById('translate-btn').addEventListener('click', startTranslation);
     document.getElementById('cancel-btn').addEventListener('click', cancelJob);
-    document.getElementById('translate-another').addEventListener('click', resetUI);
+    document.getElementById('new-video-btn').addEventListener('click', resetUI);
 
     async function startTranslation() {
       const url = document.getElementById('video-url').value.trim();
-      if (isUrlTab() && !url) {
-        alert('Please enter a video URL.');
-        return;
-      }
-      if (!isUrlTab() && !selectedFile) {
-        alert('Please select a video file.');
-        return;
-      }
+      if (isUrlTab() && !url) { shakeInput(); return; }
+      if (!isUrlTab() && !selectedFile) { shakeInput(); return; }
 
-      setLoading(true);
-      showSection('progress');
-      clearError();
+      document.getElementById('translate-btn').disabled = true;
+      showScreen('progress');
+      hideError();
 
       const settings = {
         target_language: document.getElementById('lang-select').value,
-        generate_subtitles: document.getElementById('tog-subs').checked,
-        ai_dubbing: document.getElementById('tog-dub').checked,
-        voice_matching: document.getElementById('tog-voice').checked,
-        lip_sync: document.getElementById('tog-lipsync').checked,
-        keep_original_audio: document.getElementById('tog-orig').checked,
+        generate_subtitles: featState.subs,
+        ai_dubbing: featState.dub,
+        voice_matching: featState.voice,
+        lip_sync: featState.lipsync,
+        keep_original_audio: featState.orig,
       };
 
       try {
         let job;
         if (isUrlTab()) {
-          const res = await fetch('/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ video_url: url, ...settings }),
-          });
+          const res = await fetch('/jobs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video_url:url,...settings}) });
           if (!res.ok) throw new Error(await res.text());
           job = await res.json();
         } else {
           const fd = new FormData();
           fd.append('file', selectedFile);
-          Object.entries(settings).forEach(([k, v]) => fd.append(k, v));
-          const res = await fetch('/upload', { method: 'POST', body: fd });
+          Object.entries(settings).forEach(([k,v]) => fd.append(k, v));
+          const res = await fetch('/upload', { method:'POST', body:fd });
           if (!res.ok) throw new Error(await res.text());
           job = await res.json();
         }
-
         currentJobId = job.job_id;
-        document.getElementById('job-id-label').textContent = `Job: ${job.job_id}`;
+        document.getElementById('prog-job').textContent = 'Job ' + job.job_id;
         startPolling(job.job_id);
-      } catch (e) {
-        showError('Failed to start job: ' + e.message);
-        setLoading(false);
+      } catch(e) {
+        showError('Failed to start: ' + e.message);
+        document.getElementById('translate-btn').disabled = false;
+        showScreen('input');
       }
     }
 
     function startPolling(jobId) {
       pollInterval = setInterval(async () => {
         try {
-          const res = await fetch(`/jobs/${jobId}/status`);
-          if (!res.ok) return;
-          const data = await res.json();
-          updateProgress(data.progress, data.current_step);
-          if (data.status === 'completed') {
-            stopPolling();
-            setLoading(false);
-            showResults(jobId);
-          } else if (data.status === 'failed') {
-            stopPolling();
-            setLoading(false);
-            showError('Processing failed: ' + (data.error || 'Unknown error'));
-          }
-        } catch (e) {
-          console.error('Poll error', e);
-        }
+          const data = await fetch(`/jobs/${jobId}/status`).then(r => r.json());
+          updateProgress(data);
+          if (data.status === 'completed') { stopPolling(); showResults(jobId); }
+          else if (data.status === 'failed') { stopPolling(); showError('Processing failed: ' + (data.error || 'Unknown error')); }
+        } catch(e) { console.error(e); }
       }, 2000);
     }
 
-    function stopPolling() {
-      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-    }
+    function stopPolling() { if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }
 
     async function cancelJob() {
-      if (!currentJobId) return;
       stopPolling();
-      try { await fetch(`/jobs/${currentJobId}`, { method: 'DELETE' }); } catch {}
+      if (currentJobId) { try { await fetch(`/jobs/${currentJobId}`, {method:'DELETE'}); } catch{} }
       resetUI();
     }
 
-    function updateProgress(pct, step) {
-      document.getElementById('progress-fill').style.width = pct + '%';
-      document.getElementById('progress-pct').textContent = pct + '%';
-      document.getElementById('step-label').textContent = step || '';
+    // Pipeline step order for visual tracking
+    const PIPELINE_ORDER = ['acquiring','preprocessing','transcribing','diarizing','detecting_faces','associating_speakers','detecting_lips','translating','dubbing','lipsyncing','generating_subtitles','rendering'];
+
+    function updateProgress(data) {
+      document.getElementById('prog-bar').style.width = data.progress + '%';
+      document.getElementById('prog-pct').innerHTML = data.progress + '% &nbsp;&middot;&nbsp; <span id="prog-job">' + (currentJobId ? 'Job ' + currentJobId : '') + '</span>';
+      document.getElementById('prog-sub').textContent = data.current_step || '';
+
+      const currentIdx = PIPELINE_ORDER.indexOf(data.status);
+      document.querySelectorAll('.pipe-step').forEach(el => {
+        const stepStatus = el.dataset.step;
+        const idx = PIPELINE_ORDER.indexOf(stepStatus);
+        el.classList.remove('p-done', 'p-active');
+        const statusEl = el.querySelector('.pipe-status');
+        if (idx < currentIdx) { el.classList.add('p-done'); statusEl.textContent = 'Done'; }
+        else if (stepStatus === data.status) { el.classList.add('p-active'); statusEl.textContent = 'Running...'; }
+        else { statusEl.textContent = 'Waiting'; }
+      });
     }
 
     function showResults(jobId) {
       const video = document.getElementById('result-video');
       video.src = `/stream/${jobId}`;
-
-      // Add subtitle track
       document.querySelectorAll('#result-video track').forEach(t => t.remove());
       const track = document.createElement('track');
       track.kind = 'subtitles';
@@ -642,52 +1140,49 @@
       video.appendChild(track);
 
       document.getElementById('dl-video').href = `/download/${jobId}/video`;
-      document.getElementById('dl-srt').href = `/download/${jobId}/subtitles_srt`;
-      document.getElementById('dl-vtt').href = `/download/${jobId}/subtitles_vtt`;
-      document.getElementById('result-info').textContent = `Job ID: ${jobId}`;
+      document.getElementById('dl-srt').href  = `/download/${jobId}/subtitles_srt`;
+      document.getElementById('dl-vtt').href  = `/download/${jobId}/subtitles_vtt`;
 
-      showSection('results');
+      showScreen('results');
     }
 
-    function showSection(name) {
-      document.getElementById('progress-card').style.display = name === 'progress' ? 'block' : 'none';
-      document.getElementById('results-card').style.display = name === 'results' ? 'block' : 'none';
-      document.getElementById('input-card').style.display = name === 'input' ? 'block' : 'none';
+    function showScreen(name) {
+      document.getElementById('input-screen').style.display    = name === 'input'    ? 'block' : 'none';
+      document.getElementById('progress-screen').style.display = name === 'progress' ? 'block' : 'none';
+      document.getElementById('results-screen').style.display  = name === 'results'  ? 'block' : 'none';
     }
 
     function showError(msg) {
-      const box = document.getElementById('error-box');
-      box.textContent = msg;
-      box.style.display = 'block';
+      const b = document.getElementById('error-banner');
+      document.getElementById('error-text').textContent = msg;
+      b.classList.add('visible');
     }
 
-    function clearError() {
-      const box = document.getElementById('error-box');
-      box.style.display = 'none';
-      box.textContent = '';
-    }
+    function hideError() { document.getElementById('error-banner').classList.remove('visible'); }
 
-    function setLoading(on) {
-      document.getElementById('translate-btn').disabled = on;
+    function shakeInput() {
+      const el = isUrlTab() ? document.getElementById('video-url') : document.getElementById('drop-zone');
+      el.style.outline = '2px solid var(--red)';
+      setTimeout(() => el.style.outline = '', 1200);
     }
 
     function resetUI() {
       stopPolling();
       currentJobId = null;
-      showSection('input');
-      document.getElementById('input-card').style.display = 'block';
-      document.getElementById('progress-card').style.display = 'none';
-      document.getElementById('results-card').style.display = 'none';
+      showScreen('input');
       document.getElementById('video-url').value = '';
       fileLabel.textContent = '';
       selectedFile = null;
-      updateProgress(0, 'Starting...');
-      clearError();
-      setLoading(false);
+      document.getElementById('prog-bar').style.width = '0%';
+      document.getElementById('translate-btn').disabled = false;
+      hideError();
+      document.querySelectorAll('.pipe-step').forEach(el => {
+        el.classList.remove('p-done','p-active');
+        el.querySelector('.pipe-status').textContent = 'Waiting';
+      });
     }
 
-    // Show input on load
-    document.getElementById('input-card').style.display = 'block';
+    showScreen('input');
   </script>
 </body>
 </html>
