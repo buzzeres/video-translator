@@ -1,7 +1,17 @@
 from __future__ import annotations
 import logging
+import os
 import sys
 from pathlib import Path
+
+# Ensure ffmpeg (installed via winget) is on PATH regardless of shell session
+_FFMPEG_WINGET = Path(os.environ.get("LOCALAPPDATA", "")) / (
+    "Microsoft/WinGet/Packages/"
+    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/"
+    "ffmpeg-8.0.1-full_build/bin"
+)
+if _FFMPEG_WINGET.exists():
+    os.environ["PATH"] = str(_FFMPEG_WINGET) + os.pathsep + os.environ.get("PATH", "")
 
 import uvicorn
 from fastapi import FastAPI

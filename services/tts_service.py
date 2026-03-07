@@ -60,7 +60,13 @@ class TTSService:
     def _elevenlabs_synthesize(self, text: str, output_path: Path) -> Path:
         from elevenlabs import ElevenLabs
         client = ElevenLabs(api_key=self.settings.elevenlabs_api_key)
-        audio = client.generate(text=text, model="eleven_multilingual_v2")
+        audio = client.text_to_speech.convert(
+            text=text,
+            voice_id="JBFqnCBsd6RMkjVDRZzb",  # "George" — multilingual default
+            model_id="eleven_multilingual_v2",
+            output_format="mp3_44100_128",
+        )
+        output_path = output_path.with_suffix(".mp3")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "wb") as f:
             for chunk in audio:
