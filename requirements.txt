@@ -1,0 +1,22 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+yt-dlp>=2024.3.10
+ffmpeg-python>=0.2.0
+opencv-python>=4.9.0.80
+openai-whisper>=20231117
+mediapipe>=0.10.9
+deep-translator>=1.11.4
+TTS>=0.22.0
+numpy>=1.26.0
+soundfile>=0.12.1
+librosa>=0.10.1
+aiofiles>=23.2.1
+python-dotenv>=1.0.0
+# Uncomment as needed:
+# pyannote.audio>=3.1.0
+# elevenlabs>=1.0.0
+# openai>=1.0.0
+# deepl>=1.18.0
