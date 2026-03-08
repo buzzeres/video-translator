@@ -1,6 +1,8 @@
 from __future__ import annotations
+import json
 import logging
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -20,43 +22,88 @@ def run(ctx: PipelineContext) -> None:
     tts_dir.mkdir(parents=True, exist_ok=True)
 
     segments = ctx.translated_segments or []
+    # Each entry: (start_seconds, audio_path)
     tts_files: list[tuple[float, Path]] = []
     speaker_samples: dict[str, Optional[Path]] = {}
 
     for seg in segments:
         seg_id = seg["id"]
-        out_path = tts_dir / f"seg_{seg_id:04d}.wav"
+        # Pass a .wav hint; synthesize() may change extension (e.g. to .mp3)
+        out_hint = tts_dir / f"seg_{seg_id:04d}.wav"
         text = seg.get("translated_text", seg.get("text", ""))
         if not text.strip():
             continue
 
         speaker_id = get_speaker_for_segment(seg, ctx.diarization or {})
 
-        if ctx.request.voice_matching:
-            if speaker_id not in speaker_samples:
-                speaker_samples[speaker_id] = _extract_speaker_sample(
-                    ctx.audio_path, ctx.diarization, speaker_id, ctx.workspace
+        try:
+            if ctx.request.voice_matching:
+                if speaker_id not in speaker_samples:
+                    speaker_samples[speaker_id] = _extract_speaker_sample(
+                        ctx.audio_path, ctx.diarization, speaker_id, ctx.workspace
+                    )
+                sample = speaker_samples[speaker_id]
+                actual_path = tts.synthesize_cloned(
+                    text, ctx.request.target_language, sample, out_hint
                 )
-            sample = speaker_samples[speaker_id]
-            try:
-                tts.synthesize_cloned(text, ctx.request.target_language, sample, out_path)
-            except Exception as e:
-                logger.warning(f"Voice cloning failed for seg {seg_id}: {e}. Falling back.")
-                tts.synthesize(text, ctx.request.target_language, out_path)
-        else:
-            tts.synthesize(text, ctx.request.target_language, out_path)
+            else:
+                actual_path = tts.synthesize(
+                    text, ctx.request.target_language, out_hint
+                )
+        except Exception as e:
+            logger.warning(f"TTS failed for segment {seg_id}: {e}")
+            continue
 
-        if out_path.exists():
-            original_dur = seg["end"] - seg["start"]
-            stretched_path = tts_dir / f"seg_{seg_id:04d}_s.wav"
-            final_wav = _stretch_to_duration(out_path, original_dur, stretched_path)
-            tts_files.append((seg["start"], final_wav))
-            logger.info(f"Synthesized segment {seg_id}")
+        if actual_path and actual_path.exists():
+            tts_files.append((seg["start"], actual_path))
+            logger.debug(f"Synthesized segment {seg_id} → {actual_path.name}")
 
+    if not tts_files:
+        logger.warning("No TTS segments were produced — skipping dubbing.")
+        raise StepSkippedException("No TTS audio produced")
+
+    logger.info(f"Mixing {len(tts_files)} dubbed segments via ffmpeg...")
     dubbed_path = ctx.workspace / "audio" / "dubbed.wav"
-    _mix_to_timeline(tts_files, ctx.video_metadata.get("duration", 0.0), dubbed_path)
-    ctx.dubbed_audio_path = dubbed_path
-    logger.info(f"Dubbed audio written to {dubbed_path}")
+    _mix_with_ffmpeg(tts_files, ctx.video_metadata.get("duration", 0.0), dubbed_path)
+
+    if dubbed_path.exists():
+        ctx.dubbed_audio_path = dubbed_path
+        logger.info(f"Dubbed audio ready: {dubbed_path}")
+    else:
+        logger.error("ffmpeg mix produced no output — falling back to first segment")
+        if tts_files:
+            shutil.copy2(str(tts_files[0][1]), str(dubbed_path))
+            ctx.dubbed_audio_path = dubbed_path
+
+
+def _mix_with_ffmpeg(tts_files: list[tuple[float, Path]], total_dur: float, out_path: Path) -> None:
+    """Use ffmpeg adelay+amix to position each audio clip at its original timestamp."""
+    inputs = []
+    filter_parts = []
+
+    for i, (start_t, audio_path) in enumerate(tts_files):
+        inputs += ["-i", str(audio_path)]
+        delay_ms = int(start_t * 1000)
+        filter_parts.append(f"[{i}]adelay={delay_ms}|{delay_ms}[d{i}]")
+
+    n = len(tts_files)
+    mix_inputs = "".join(f"[d{i}]" for i in range(n))
+    filter_parts.append(f"{mix_inputs}amix=inputs={n}:duration=longest:normalize=0[out]")
+    filter_complex = ";".join(filter_parts)
+
+    cmd = [
+        "ffmpeg", "-y",
+        *inputs,
+        "-filter_complex", filter_complex,
+        "-map", "[out]",
+        "-ar", "44100",
+        "-ac", "2",
+        str(out_path),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg mix failed: {result.stderr[-500:]}")
 
 
 def _extract_speaker_sample(
@@ -68,8 +115,6 @@ def _extract_speaker_sample(
     if not audio_path or not diarization:
         return None
     ranges = diarization.get(speaker_id, [])
-    if not ranges:
-        return None
     for start, end in ranges:
         if end - start >= 3.0:
             sample_path = workspace / "audio" / f"sample_{speaker_id}.wav"
@@ -87,62 +132,3 @@ def _extract_speaker_sample(
             except Exception:
                 return None
     return None
-
-
-def _stretch_to_duration(wav_path: Path, target_dur: float, out_path: Path) -> Path:
-    try:
-        import librosa
-        import soundfile as sf
-        y, sr = librosa.load(str(wav_path), sr=None)
-        current_dur = len(y) / sr
-        if current_dur <= 0 or target_dur <= 0:
-            return wav_path
-        rate = current_dur / target_dur
-        rate = max(0.5, min(rate, 2.0))
-        if abs(rate - 1.0) < 0.05:
-            return wav_path
-        stretched = librosa.effects.time_stretch(y, rate=rate)
-        sf.write(str(out_path), stretched, sr)
-        return out_path
-    except Exception:
-        return wav_path
-
-
-def _mix_to_timeline(tts_files: list[tuple[float, Path]], total_dur: float, out_path: Path) -> None:
-    try:
-        import numpy as np
-        import soundfile as sf
-
-        if not tts_files:
-            sr = 22050
-            silence = np.zeros(int(max(total_dur, 1) * sr), dtype=np.float32)
-            sf.write(str(out_path), silence, sr)
-            return
-
-        first_y, sr = sf.read(str(tts_files[0][1]), dtype="float32")
-        total_samples = max(int(total_dur * sr), 1)
-        timeline = np.zeros(total_samples, dtype=np.float32)
-
-        for start_t, wav_path in tts_files:
-            try:
-                y, file_sr = sf.read(str(wav_path), dtype="float32")
-                if file_sr != sr:
-                    import librosa
-                    y = librosa.resample(y, orig_sr=file_sr, target_sr=sr)
-                start_sample = int(start_t * sr)
-                end_sample = min(start_sample + len(y), total_samples)
-                chunk = y[:end_sample - start_sample]
-                timeline[start_sample:end_sample] += chunk
-            except Exception as e:
-                logger.warning(f"Could not mix {wav_path}: {e}")
-
-        peak = np.max(np.abs(timeline))
-        if peak > 1.0:
-            timeline /= peak
-
-        sf.write(str(out_path), timeline, sr)
-
-    except Exception as e:
-        logger.error(f"Failed to mix dubbed audio: {e}")
-        if tts_files:
-            shutil.copy2(str(tts_files[0][1]), str(out_path))
